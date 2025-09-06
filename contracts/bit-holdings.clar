@@ -195,3 +195,67 @@
       transfer-enabled: true,
       creation-block: stacks-block-height,
     })
+
+    ;; Establish Initial Ownership Structure
+    (update-ownership-units new-asset-id tx-sender total-units)
+
+    ;; Mint Primary Ownership Certificate
+    (unwrap! (nft-mint? bitholdings-certificate new-asset-id tx-sender)
+      TRANSFER-REJECTED-ERROR
+    )
+
+    ;; Record Tokenization Event
+    (unwrap! (record-transaction u"ASSET_TOKENIZED" new-asset-id tx-sender)
+      INVALID-PARAMETERS-ERROR
+    )
+
+    ;; Update Global State
+    (var-set asset-counter (+ new-asset-id u1))
+    (ok new-asset-id)
+  )
+)
+
+;; Fractional Ownership Transfer Engine - Enable institutional-grade asset trading
+(define-public (execute-ownership-transfer
+    (asset-id uint)
+    (recipient principal)
+    (transfer-units uint)
+  )
+  (let (
+      (asset-data (unwrap! (map-get? registered-assets { asset-id: asset-id })
+        INVALID-ASSET-ERROR
+      ))
+      (sender tx-sender)
+      (current-holdings (get-ownership-units asset-id sender))
+    )
+    ;; Multi-Layer Validation Framework
+    (asserts! (validate-asset-existence asset-id) INVALID-PARAMETERS-ERROR)
+    (asserts! (validate-participant recipient) INVALID-PARAMETERS-ERROR)
+    (asserts! (get transfer-enabled asset-data) UNAUTHORIZED-ERROR)
+    (asserts! (verify-regulatory-compliance asset-id recipient)
+      COMPLIANCE-VIOLATION-ERROR
+    )
+    (asserts! (>= current-holdings transfer-units) INSUFFICIENT-OWNERSHIP-ERROR)
+
+    ;; Execute Atomic Ownership Transfer
+    (update-ownership-units asset-id sender (- current-holdings transfer-units))
+    (update-ownership-units asset-id recipient
+      (+ (get-ownership-units asset-id recipient) transfer-units)
+    )
+
+    ;; Record Transfer Transaction
+    (unwrap! (record-transaction u"OWNERSHIP_TRANSFERRED" asset-id sender)
+      INVALID-PARAMETERS-ERROR
+    )
+
+    ;; Handle Primary Certificate Transfer (if complete ownership transfer)
+    (if (is-eq current-holdings transfer-units)
+      (unwrap! (nft-transfer? bitholdings-certificate asset-id sender recipient)
+        TRANSFER-REJECTED-ERROR
+      )
+      true
+    )
+
+    (ok true)
+  )
+)
