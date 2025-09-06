@@ -259,3 +259,73 @@
     (ok true)
   )
 )
+
+;; Regulatory Compliance Management - Institutional KYC/AML framework
+(define-public (update-compliance-status
+    (asset-id uint)
+    (participant principal)
+    (approval-status bool)
+  )
+  (begin
+    ;; Authorization & Validation Checks
+    (asserts! (validate-asset-existence asset-id) INVALID-PARAMETERS-ERROR)
+    (asserts! (validate-participant participant) INVALID-PARAMETERS-ERROR)
+    (asserts! (is-eq tx-sender PROTOCOL-OWNER) UNAUTHORIZED-ERROR)
+
+    ;; Update Regulatory Approval Registry
+    (map-set regulatory-approvals {
+      asset-id: asset-id,
+      participant: participant,
+    } {
+      compliance-status: approval-status,
+      verification-timestamp: stacks-block-height,
+      approving-authority: tx-sender,
+    })
+
+    ;; Log Compliance Action
+    (unwrap! (record-transaction u"COMPLIANCE_UPDATED" asset-id participant)
+      INVALID-PARAMETERS-ERROR
+    )
+
+    (ok approval-status)
+  )
+)
+
+;; PROTOCOL DATA ACCESS LAYER
+
+;; Asset Registry Query Interface
+(define-read-only (query-asset-details (asset-id uint))
+  (map-get? registered-assets { asset-id: asset-id })
+)
+
+;; Ownership Position Query
+(define-read-only (query-ownership-position
+    (asset-id uint)
+    (holder principal)
+  )
+  (ok (get-ownership-units asset-id holder))
+)
+
+;; Regulatory Status Verification
+(define-read-only (query-compliance-status
+    (asset-id uint)
+    (participant principal)
+  )
+  (map-get? regulatory-approvals {
+    asset-id: asset-id,
+    participant: participant,
+  })
+)
+
+;; Transaction History Access
+(define-read-only (query-transaction-record (transaction-id uint))
+  (map-get? protocol-events { transaction-id: transaction-id })
+)
+
+;; Protocol Statistics
+(define-read-only (get-protocol-statistics)
+  (ok {
+    total-assets: (- (var-get asset-counter) u1),
+    total-transactions: (var-get transaction-nonce),
+  })
+)
